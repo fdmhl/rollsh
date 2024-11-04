@@ -1,0 +1,10 @@
+# Test Roll for Rollsh
+
+```rollsh
+cat - > hello.js
+console .log ( 'echo "Hello World!" > hello.txt' );
+```
+
+```rollsh
+node hello.js | bash - ; rm hello.js
+```
