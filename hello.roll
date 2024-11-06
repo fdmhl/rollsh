@@ -1,10 +1,15 @@
 # Test Roll for Rollsh
 
 ```rollsh
-cat - > hello.js
-console .log ( 'echo "Hello World!" > hello.txt' );
+mkdir -p .hello ; cat - > .hello/index.js
+
+console .log ( `echo "Hello ${ process .argv .length > 2 ? process .argv .slice ( 2 ) .join ( ' ' ) : 'World' }!"` );
+```
+
+```rollsh 1
+cd .hello ; node . ${ARGV[@]} | bash -
 ```
 
 ```rollsh
-node hello.js | bash - ; rm hello.js
+rm -rf .hello
 ```

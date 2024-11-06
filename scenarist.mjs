@@ -41,8 +41,15 @@ switch ( typeof conflict ) {
 
 case 'object':
 
-if ( ! this .#plot .has ( conflict ) )
-this .#plot .set ( conflict, new this .constructor ( conflict ) );
+if ( ! this .#plot .has ( conflict ) ) {
+
+const scenarist = new this .constructor ( conflict );
+
+await scenarist .#ready;
+
+this .#plot .set ( conflict, scenarist );
+
+}
 
 resolution = this .#plot .get ( conflict ) .#$ ( setting, ... argv );
 

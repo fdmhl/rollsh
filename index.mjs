@@ -3,12 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { Writable } from 'node:stream';
 import { Console } from 'node:console';
+import { parse } from 'node:path';
 
 try {
 
 await Scenarist ( new class Rollsh {
-
-usage = 'Usage: rollsh FILENAME [ ... argv ]';
 
 #argv;
 #filename;
@@ -52,7 +51,8 @@ this .#cursor++;
 try { await Promise .resolve ( $ ( ... this .#line ) ) }
 catch ( error ) { throw Object .assign ( error, {
 
-line: this .#line,
+filename: this .#filename,
+line: this .#line .join ( ' ' ),
 cursor: this .#cursor
 
 } ) }
@@ -61,19 +61,25 @@ await $ ( Symbol .for ( 'processor' ) );
 
 }; // Rollsh .prototype .$_processor
 
-[ '$```rollsh' ] ( setting, ... argv ) {
+async [ '$```rollsh' ] ( setting, ... argv ) {
 
 if ( this .$_ )
 throw Object .assign ( setting, { message: "Can't start a new rollsh page before finishing the current one" } );
 
 this .$_ = new Rollsh .#Page ( ... argv );
 
+await setting .$ ( Symbol .for ( 'stdio' ) );
+
 }; // Rollsh .prototype [ '$```rollsh' ]
 
-$_finish ( { $ }, code ) {
+$_argv () { return this .#argv .join ( ' ' ) };
+
+async $_finish ( setting, code ) {
 
 if ( code !== 0 )
-throw Object .assign ( setting, { message: "Current rollsh page didn't finish successfully" } );
+throw Object .assign ( setting, { message: `Rollsh page process didn't finish successfully:
+#commandLine ${ await setting .$ ( Symbol .for ( 'command' ) ) }
+#exitCode ${ code }` } );
 
 delete this .$_;
 
@@ -88,8 +94,8 @@ static #Page = class Page {
 
 constructor ( ... argv ) {
 
-this .$_setup = new Rollsh .#Setup ( ... argv );
-this .#exit = new Promise ( code => ( this .#code = code ) );
+this .$_stdio = new Rollsh .#Stdio ( ... argv );
+this .#exit = new Promise ( ( ... code ) => ( this .#code = code ) );
 
 }; // Rollsh .#Page .prototype .constructor
 
@@ -98,7 +104,6 @@ $_ ( { player: { $ } }, ... argv ) {
 if ( ! this .#process )
 return $ ( Symbol .for ( 'process' ), ... argv );
 
-if ( this .#input )
 this .#input .log ( ... argv );
 
 }; // Rollsh .#Page .prototype .$_
@@ -108,15 +113,15 @@ async $_process ( setting, ... argv ) {
 if ( ! argv .length )
 throw Object .assign ( setting, { message: "Can't create a new rollsh page without providing a command" } );
 
-const { $ } = setting;
+this .$_command = argv .join ( ' ' );
 
-this .#process = spawn ( 'bash', [ '-c', argv .join ( ' ' ), 'rollsh' ], await $ ( Symbol .for ( 'setup' ) ) );
+this .#process = spawn ( 'bash', [ '-c', `ARGV=(${ ( await setting .player .$ ( Symbol .for ( 'argv' ) ) ) }) ; ${ this .$_command }`, 'rollsh' ], { stdio: await setting .$ ( Symbol .for ( 'stdio' ) ) } );
 
-if ( this .#process .stdin instanceof Writable )
-this .#input = new Console ( this .#process .stdin );
+this .#input = new Console ( this .#process .stdin || process .stdin );
 
 this .#process .on ( 'exit', code => setting .player .$ ( Symbol .for ( 'finish' ), code )
-.then ( () => this .#code ( code ) ) );
+.then ( () => this .#code [ 0 ] ( code ) )
+.catch ( error => this .#code [ 1 ] ( error ) ) );
 
 }; // Rollsh .#Page .prototype .$_process
 
@@ -131,32 +136,45 @@ return this .#exit;
 
 }; // Rollsh .#Page
 
-static #Setup = class Setup {
+static #Stdio = class Stdio {
 
 #argv;
-#options = {
-
-stdio: [ 'pipe', 'pipe', 'pipe' ]
-
-}; // Rollsh .#Setup .prototype .#options
+#value = [ 'pipe', 'pipe', 'pipe' ];
 
 constructor ( ... argv ) { this .#argv = argv };
 
-$__ ( { $ } ) { return $ ( ... this .#argv ) };
+async $__ ( { $ } ) { return await $ ( ... this .#argv ) };
 
-$_ ( { $ }, ... argv ) {
+$_ ( setting, ... argv ) {
 
 if ( ! argv .length )
-return this .#options;
+return this .#value;
 
-}; // Rollsh .#Setup .prototype .$_
+const descriptor = parseFloat ( argv .shift () );
 
-}; // Rollsh .#Setup
+switch ( descriptor ) {
+
+case 0: case 1: case 2:
+this .#value [ descriptor ] = 'inherit';
+
+return setting .$ ( ... argv );
+
+default:
+throw Object .assign ( setting, { message: 'Invalid stdio file descriptor number: ' + descriptor } );
+
+}
+
+}; // Rollsh .#Stdio .prototype .$_
+
+}; // Rollsh .#Stdio
 
 } ( ... process .argv .slice ( 2 ) ) ); // Scenarist ( Rollsh )
 
 } catch ( error ) {
 
-console .error ( '#rollsh', error );
+console .error ( '#rollsh', `${ parse ( import .meta .url ) .dir }/${ error .filename }:${ error .cursor }
+${ error .line }
+
+${ error .message }` );
 
 }
